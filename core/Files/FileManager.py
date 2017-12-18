@@ -12,10 +12,11 @@ from Queue import Queue
 from threading import Thread
 
 class FileManager(Thread):
-    def __init__(self, outputdir):
+    def __init__(self, outputdir, write_file_data):
         Thread.__init__(self)
         self.setName('FileManager thread')
         self.daemon = True
+        self.write_file_data = write_file_data
 
         self.files = Queue()
         self.outputdir = outputdir
@@ -40,21 +41,32 @@ class FileManager(Thread):
                 self.files.task_done()
                 continue
 
-            path = "%s/%ss/%s_%s/%s/" % (self.outputdir, file.type, file.source, file.destination, file.timestamp)
-            if not os.path.exists(path):
-                os.makedirs(path)
+            number = 1 if self.write_file_data else 0
 
-            number = 1
-            filename = '%s %d.%s' % (file.name, number, file.fileEnding)
+            if self.write_file_data:
+                path = "%s/%ss/%s_%s/%s/" % (self.outputdir, file.type, file.source, file.destination, file.timestamp)
+                if not os.path.exists(path):
+                    os.makedirs(path)
 
-            while os.path.exists(path + filename):
+                filename = '%s %d.%s' % (file.name, number, file.fileEnding)
+
+                while os.path.exists(path + filename):
+                    number += 1
+                    filename = '%s %d.%s' % (file.name, number, file.fileEnding)
+
+                filename = filename.rstrip('.')
+                with open(path + filename, 'wb') as outfile:
+                    outfile.write(file.data)
+                    # Utils.printl("Wrote file: %s%s" % (path, filename))
+                    print("Wrote file: %s%s" % (path, filename))
+            else:
+                if not os.path.exists(self.outputdir):
+                    os.makedirs(self.outputdir)
+                # global for all file names
                 number += 1
                 filename = '%s %d.%s' % (file.name, number, file.fileEnding)
 
-            filename = filename.rstrip('.')
-            with open(path + filename, 'wb') as outfile:
-                outfile.write(file.data)
-                Utils.printl("Wrote file: %s%s" % (path, filename))
+
 
             with open(self.outputdir + '/files.csv', 'ab') as outcsv:
                 csvwriter = csv.writer(outcsv, delimiter=',')

@@ -11,23 +11,24 @@ from Plugins.PluginManager import *
 DEBUG = False
 
 class Dispatcher:
-    def __init__(self, pcapfile, outputdir='output', entropy=False, **kwargs):
+    def __init__(self, pcapfile, outputdir='output', entropy=False, write_file_data=False, **kwargs):
         self.kwargs = kwargs
         self.pcapfile = pcapfile
-        self.filemanager = FileManager(outputdir)
+        self.filemanager = FileManager(outputdir, write_file_data)
         self.pm = PluginManager()
         self.outputdir = outputdir
         self.useEntropy = entropy
 
     def _finishedSearch(self, (stream, result)):
-        Utils.printl("Found %d files in %s stream %s" % (len(result), stream.protocol, stream.infos))
+        # Utils.printl("Found %d files in %s stream %s" % (len(result), stream.protocol, stream.infos))
+        print("Found %d files in %s stream %s" % (len(result), stream.protocol, stream.infos))
         map(self.filemanager.addFile, result)
 
     def run(self):
-        if os.path.exists(self.outputdir):
-            print "Output folder \'%s\' already exists! Exiting..." % (self.outputdir,)
-            self.filemanager.exit()
-            return
+        # if os.path.exists(self.outputdir):
+        #     print "Output folder \'%s\' already exists! Exiting..." % (self.outputdir,)
+        #     self.filemanager.exit()
+        #     return
 
 
         print "Reassembling streams..."
@@ -56,9 +57,12 @@ class Dispatcher:
 
     def _findFiles(self, stream):
         files = []
-        payloads= []
+        payloads = []
         streamdata = stream.getAllBytes()
-        streamPorts = (stream.ipSrc, stream.ipDst)
+        streamPorts = (stream.portSrc, stream.portDst)
+
+        if 443 in streamPorts:
+            return stream, files
 
         for protocol in self.pm.getProtocolsByHeuristics(streamPorts):
             payloads = self.pm.protocolDissectors[protocol].parseData(streamdata)
@@ -96,9 +100,8 @@ class Dispatcher:
                     if stream.tsFirstPacket:
                         file.timestamp = stream.tsFirstPacket
                     files.append(file)
-                    
 
-        return (stream, files)
+        return stream, files
 
 if __name__ == '__main__':
     d = Dispatcher(os.path.dirname(__file__) + '/../tests/webextract/web_light.pcap')

@@ -65,9 +65,11 @@ class HTTP11(ProtocolDissector):
     def parseHeaders(cls, data):
         headers = dict()
         line = data.readline()
-        while line not in ['\r\n','']:
+        while line not in ['\r\n', '']:
             keyval = line.split(':')
-            headers[keyval[0].strip()] = keyval[1].strip()
+            if len(keyval) > 1:
+                # headers[keyval[0].strip()] = ':'.join(keyval[1:5]).strip()
+                headers[keyval[0].strip()] = keyval[1].strip()
             line = data.readline()
         return headers
 

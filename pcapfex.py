@@ -13,8 +13,10 @@ parser.add_argument('output', metavar='OUTPUT_FOLDER', help='the target folder f
                     nargs='?', default='output')
 parser.add_argument("-e", dest='entropy', help="use entropy based rawdata extraction",
                     action="store_true", default=False)
+parser.add_argument("-wfd", dest='write_file_data', help="write the file to output folder",
+                    action="store_true", default=False)
 parser.add_argument("-nv", dest='verifyChecksums', help="disable IP/TCP/UDP checksum verification",
-                    action="store_false", default=True)
+                    action="store_false", default=False)
 parser.add_argument("--T", dest='udpTimeout', help="set timeout for UDP-stream heuristics",
                     type=int, default=120)
 
@@ -29,7 +31,7 @@ if args.entropy:
     print 'Using entropy and statistical analysis for raw extraction and classification of unknown data.'
 
 
-dispatcher = Dispatcher(args.input, args.output, args.entropy,
+dispatcher = Dispatcher(args.input, args.output, args.entropy, args.write_file_data,
                         verifyChecksums=args.verifyChecksums,
                         udpTimeout=args.udpTimeout,
                         )
