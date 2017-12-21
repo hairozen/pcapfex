@@ -15,9 +15,9 @@ class TCPStream(PacketStream):
     def __len__(self):
         return len(self.packets)
 
-    def addPacket(self, packet, ts):
-        if type(packet) != dpkt.tcp.TCP:
-            raise TypeError('Packet is not a TCP packet!')
+    def addPacket(self, packet):
+        # if type(packet) != dpkt.tcp.TCP:
+        #     raise TypeError('Packet is not a TCP packet!')
 
         if len(packet.data) == 0:
             return
@@ -25,11 +25,11 @@ class TCPStream(PacketStream):
         if packet.seq not in self.packets:
             self.packets[packet.seq] = packet
 
-        if self.tsFirstPacket is None or ts < self.tsFirstPacket:
-            self.tsFirstPacket = ts
-
-        if self.tsLastPacket is None or ts > self.tsLastPacket:
-            self.tsLastPacket = ts
+        # if self.tsFirstPacket is None or ts < self.tsFirstPacket:
+        #     self.tsFirstPacket = ts
+        #
+        # if self.tsLastPacket is None or ts > self.tsLastPacket:
+        #     self.tsLastPacket = ts
 
 
     def __iter__(self):

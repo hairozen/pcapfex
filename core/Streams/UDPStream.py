@@ -12,17 +12,17 @@ class UDPStream(PacketStream):
         self.tsLastPacket = None
 
     def addPacket(self, packet, ts):
-        if type(packet) != dpkt.udp.UDP:
-            raise TypeError('Packet is no UDP packet!')
+        # if type(packet) != dpkt.udp.UDP:
+        #     raise TypeError('Packet is no UDP packet!')
 
         if len(packet.data) == 0:
             return
 
-        if len(self.packets) == 0:
-            self.tsFirstpacket = ts
+        # if len(self.packets) == 0:
+        #     self.tsFirstpacket = ts
 
         self.packets.append(packet)
-        self.tsLastPacket = ts
+        # self.tsLastPacket = ts
 
     def __iter__(self):
         return iter(self.packets)

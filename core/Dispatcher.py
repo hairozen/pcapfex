@@ -11,13 +11,14 @@ from Plugins.PluginManager import *
 DEBUG = False
 
 class Dispatcher:
-    def __init__(self, pcapfile, outputdir='output', entropy=False, write_file_data=False, **kwargs):
+    def __init__(self, logger, pcapfile, outputdir='output', entropy=False, write_file_data=False, **kwargs):
         self.kwargs = kwargs
         self.pcapfile = pcapfile
         self.filemanager = FileManager(outputdir, write_file_data)
         self.pm = PluginManager()
         self.outputdir = outputdir
         self.useEntropy = entropy
+        self.logger = logger
 
     def _finishedSearch(self, (stream, result)):
         # Utils.printl("Found %d files in %s stream %s" % (len(result), stream.protocol, stream.infos))
@@ -31,14 +32,15 @@ class Dispatcher:
         #     return
 
 
-        print "Reassembling streams..."
+        self.logger.info("Reassembling streams...")
         streambuilder = StreamBuilder(self.pcapfile, **self.kwargs)
         allstreams = streambuilder.tcpStreams + streambuilder.udpStreams
 
-        print "\nStream Reassembly finished.\n\tFile %s has a total of %d single-direction streams." % (self.pcapfile,
-                                                                                                   len(allstreams))
+        self.logger.info("Stream Reassembly finished.")
+        self.logger.info("File %s has a total of %d single-direction streams." % (self.pcapfile,len(allstreams)))
 
-        print "Searching streams for forensic evidence...\n"
+
+        self.logger.info("Searching streams for forensic evidence...")
         if DEBUG:
             # Single threaded search for easier debugging
             map(lambda s: self._finishedSearch(self._findFiles(s)), allstreams)
@@ -48,10 +50,8 @@ class Dispatcher:
             workers.map_async(self._findFiles, allstreams, self._finishedSearch)
             workers.join()
 
-
-
         self.filemanager.exit()
-        print "Evidence search has finished.\n"
+        self.logger.info("Evidence search has finished.")
 
 
 

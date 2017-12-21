@@ -8,6 +8,7 @@ import socket
 import os
 import sys
 import dpkt
+import pandas as pd
 
 # Workaround to get access to pcap packet record capture length field
 def myIter(self):
@@ -65,6 +66,8 @@ class StreamBuilder:
             fsize = float(os.path.getsize(pcapfile))
             progress = -1
 
+            tcp_packets = []
+            udp_packets = []
             openTcpStreams = []
             openUdpStreams = []
 
@@ -91,81 +94,73 @@ class StreamBuilder:
                 if self.VERIFY_CHECKSUMS and not self.__verify_checksums(ip):
                     continue
 
+
                 packet = ip.data
                 if ip.p == dpkt.ip.IP_PROTO_TCP:
 
-                    # get last matching stream occurrence for packet
-                    tcpStream = self.__findLastStreamOccurenceIn(openTcpStreams,
-                                                                 ip.src, packet.sport,
-                                                                 ip.dst, packet.dport)
+                    src_ip = socket.inet_ntoa(ip.src)
+                    dst_ip = socket.inet_ntoa(ip.dst)
+                    src_port = packet.sport
+                    dst_port = packet.dport
+                    key = frozenset({src_ip, dst_ip, src_port, dst_port})
+                    tcp_packets.append({'key': key,
+                                        'src_ip': src_ip, "dst_ip": dst_ip,
+                                        'src_port': src_port, 'dst_port': dst_port,
+                                        'packetNumber': packetNumber,
+                                        'ts': ts, 'packet': packet})
 
-                    # no matching open stream found, create new stream if syn flag is set
-                    if tcpStream is None:
-                        if not packet.flags & dpkt.tcp.TH_SYN:
-                            continue
-
-                        tcpStream = TCPStream(socket.inet_ntoa(ip.src), packet.sport,
-                                              socket.inet_ntoa(ip.dst), packet.dport, packetNumber, pcapfile)
-                        openTcpStreams.append(tcpStream)
-
-                    # add packet to currently referenced stream
-                    tcpStream.addPacket(packet, ts)
-
-                    # check if stream needs to be closed due to fin flag and verify stream
-                    if packet.flags & dpkt.tcp.TH_FIN:
-                        if tcpStream.isValid():
-                            tcpStream.closed = True
-                            self.tcpStreams.append(tcpStream)
-                        openTcpStreams.remove(tcpStream)
 
 
                 elif ip.p == dpkt.ip.IP_PROTO_UDP:
                     if len(packet.data) == 0:
                         continue
 
-                    #get last matching stream occurrence for packet
-                    udpStream = self.__findLastStreamOccurenceIn(openUdpStreams,
-                                                             ip.src, packet.sport,
-                                                             ip.dst, packet.dport)
+                    src_ip = socket.inet_ntoa(ip.src)
+                    dst_ip = socket.inet_ntoa(ip.dst)
+                    src_port = packet.sport
+                    dst_port = packet.dport
+                    key = frozenset({src_ip, dst_ip, src_port, dst_port})
+                    udp_packets.append({'key': key,
+                                        'src_ip': src_ip, "dst_ip": dst_ip,
+                                        'src_port': src_port, 'dst_port': dst_port,
+                                        'packetNumber': packetNumber,
+                                        'ts': ts, 'packet': packet})
 
+            if len(tcp_packets) > 0:
+                df_tcp = pd.DataFrame(tcp_packets)
+                df_tcp["stream_id"] = pd.Categorical(df_tcp['key']).codes
+                for stream_id, group in df_tcp.groupby("stream_id"):
+                    tcpStream = TCPStream(group["src_ip"].values[0], group["src_port"].values[0],
+                                          group["dst_ip"].values[0], group["dst_port"].values[0],
+                                          group['packetNumber'].min(), pcapfile)
 
-                    # no matching open stream found, create new stream
-                    if udpStream is None or udpStream.closed:
-                        udpStream = UDPStream(socket.inet_ntoa(ip.src), packet.sport,
-                                              socket.inet_ntoa(ip.dst), packet.dport, packetNumber, pcapfile)
-                        openUdpStreams.append(udpStream)
+                    for packet, ts in zip(group["packet"].values, group["ts"].values):
+                        tcpStream.addPacket(packet)
+                    self.tcpStreams.append(tcpStream)
 
-                    else:
-                        lastSeen = udpStream.tsLastPacket
+            if len(udp_packets) > 0:
+                df_udp = pd.DataFrame(udp_packets)
+                df_udp["stream_id"] = pd.Categorical(df_udp['key']).codes
+                for stream_id, group in df_udp.groupby("stream_id"):
+                    udpStream = UDPStream(group["src_ip"].values[0], group["src_port"].values[0],
+                                          group["dst_ip"].values[0], group["dst_port"].values[0],
+                                          group['packetNumber'].min(), pcapfile)
 
-                        # timeout happened, close old and create new stream
-                        if lastSeen and (ts - lastSeen) > self.UDP_TIMEOUT:
-                            udpStream.closed = True
-                            openUdpStreams.remove(udpStream)
+                    used_packets = []
+                    lastSeen_ts = group["ts"].values[0]
+                    for packet, ts, packetNumber in zip(group["packet"].values, group["ts"].values, group["packetNumber"].values):
+                        if ts - lastSeen_ts > self.UDP_TIMEOUT:
                             self.udpStreams.append(udpStream)
+                            sub_group = group[~group["packetNumber"].isin(used_packets)]
+                            udpStream = UDPStream(sub_group["src_ip"].values[0], sub_group["src_port"].values[0],
+                                                  sub_group["dst_ip"].values[0], sub_group["dst_port"].values[0],
+                                                  sub_group['packetNumber'].min(), pcapfile)
+                            udpStream.addPacket(packet, ts)
+                            used_packets.append(packetNumber)
+                        else:
+                            # add packet to currently referenced udpStream
+                            udpStream.addPacket(packet, ts)
+                            used_packets.append(packetNumber)
 
-                            udpStream = UDPStream(socket.inet_ntoa(ip.src), packet.sport,
-                                                  socket.inet_ntoa(ip.dst), packet.dport, packetNumber, pcapfile)
-                            openUdpStreams.append(udpStream)
+                    self.udpStreams.append(udpStream)
 
-                    # add packet to currently referenced udpStream
-                    udpStream.addPacket(packet, ts)
-                else:
-                    continue
-
-            self.tcpStreams += filter(lambda s: s.isValid(), openTcpStreams)
-            self.udpStreams += openUdpStreams
-
-            if caplenError:
-                print '\nWarning: Packet loss due to too small capture length!'
-
-    def __findLastStreamOccurenceIn(cls, list, ipSrc, portSrc, ipDst, portDst):
-        for stream in list[::-1]:
-            if stream.portSrc == portSrc \
-                    and stream.portDst == portDst \
-                    and stream.ipSrc == socket.inet_ntoa(ipSrc) \
-                    and stream.ipDst == socket.inet_ntoa(ipDst):
-
-                    return stream
-
-        return None

@@ -1,5 +1,10 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf8 -*-
+import logging
+import os
+
+import time
+
 __author__ = 'Viktor Winkelmann'
 
 import argparse
@@ -31,9 +36,48 @@ if args.entropy:
     print 'Using entropy and statistical analysis for raw extraction and classification of unknown data.'
 
 
-dispatcher = Dispatcher(args.input, args.output, args.entropy, args.write_file_data,
-                        verifyChecksums=args.verifyChecksums,
-                        udpTimeout=args.udpTimeout,
-                        )
-dispatcher.run()
+def get_logger():
+    logger = logging.getLogger('PCAPFEX')
+    logger.setLevel(logging.DEBUG)
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler('pcapfex.log')
+    fh.setLevel(logging.DEBUG)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+    # add the handlers to logger
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+    return logger
 
+
+logger = get_logger()
+
+# dispatcher = Dispatcher(logger, args.input, args.output, args.entropy, args.write_file_data,
+#                         verifyChecksums=args.verifyChecksums,
+#                         udpTimeout=args.udpTimeout,
+#                         )
+# dispatcher.run()
+
+while True:
+    path = 'F:\\Users\\hair\\Desktop\\Lucy\\pcaps - Copy'
+    fullpath = ''
+    for f in os.listdir(path):
+        try:
+            if f.startswith('s1m'):
+                fullpath = os.path.join(path, f)
+                logger.info(fullpath)
+                dispatcher = Dispatcher(logger, fullpath, args.output, args.entropy, args.write_file_data,
+                                        verifyChecksums=args.verifyChecksums,
+                                        udpTimeout=args.udpTimeout,
+                                        )
+                dispatcher.run()
+                os.remove(fullpath)
+        except Exception as e:
+            logger.exception(e)
+            os.remove(fullpath)
+    time.sleep(3)
